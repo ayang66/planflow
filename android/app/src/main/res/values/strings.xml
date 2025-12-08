@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">planflow1.0</string>
+    <string name="title_activity_main">planflow1.0</string>
+    <string name="package_name">com.planflow.app</string>
+    <string name="custom_url_scheme">com.planflow.app</string>
+</resources>

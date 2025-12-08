@@ -1,0 +1,7 @@
+{
+  "name": "PlanFlow AI（ui2.0）",
+  "description": "An intelligent planning assistant that breaks down your goals into actionable steps and syncs them directly to your calendar.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
