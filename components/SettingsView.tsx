@@ -1,9 +1,10 @@
 
 import React, { useState, useRef } from 'react';
 import { Language, ThemeColor, BackgroundTheme } from '../types';
-import { Crown, Globe, Check, CreditCard, ChevronRight, Loader2, Sparkles, CheckCircle2, X, Palette, Layout, Smartphone, Upload, Trash2 } from './Icons';
+import { Crown, Globe, Check, CreditCard, ChevronRight, Loader2, Sparkles, CheckCircle2, X, Palette, Layout, Smartphone, Upload, Trash2, LogOut } from './Icons';
 import { translations } from '../utils/translations';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { ImageCropper } from './ImageCropper';
 
 interface SettingsViewProps {
@@ -21,6 +22,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ language, setLanguag
     bgOpacity, setBgOpacity,
     customBgImage, setCustomBgImage
   } = useTheme();
+  const { user, logout: authLogout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await authLogout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
   
   // Navigation State
   const [activeModal, setActiveModal] = useState<'NONE' | 'APPEARANCE' | 'LANGUAGE'>('NONE');
@@ -147,6 +161,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ language, setLanguag
     <>
       <div className="px-4 py-6 space-y-6 pb-32 animate-in fade-in slide-in-from-bottom-2">
         
+        {/* User Account Card */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">账户信息</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-slate-800">{user?.email}</p>
+                <p className="text-xs text-slate-500">已登录</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className={`flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isLoggingOut ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>登出中...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-4 h-4" />
+                    <span>登出</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Plan Status Card */}
         <div className={`rounded-2xl p-6 relative overflow-hidden ${isPro ? 'bg-gradient-to-br from-slate-900 to-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-900 shadow-sm'}`}>
            {isPro && (

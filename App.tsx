@@ -11,13 +11,16 @@ import { Download, Loader2, Sparkles, Calendar } from './components/Icons';
 import { LiveVoiceMode } from './components/LiveVoiceMode';
 import { ClarificationModal } from './components/ClarificationModal';
 import { SplashScreen } from './components/SplashScreen';
+import { AuthView } from './components/AuthView';
 import { decomposeGoal, modifyPlan, checkGoalClarity } from './services/geminiService';
 import { downloadICSFile } from './services/calendarService';
 import { LoadingState, Plan, Tab, TaskItem, ReminderSetting, ReminderStyle, Language } from './types';
 import { translations } from './utils/translations';
 import { useTheme } from './contexts/ThemeContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-function App() {
+function AppContent() {
+  const { isAuthenticated, isLoading, user } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('create');
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
@@ -559,8 +562,27 @@ function App() {
     }
   };
 
+  // 显示启动画面
   if (showSplash) {
     return <SplashScreen language={language} />;
+  }
+
+  // 如果正在加载认证状态，显示加载画面
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-screen max-w-2xl mx-auto items-center justify-center">
+        <div className={`w-16 h-16 bg-${themeColor}-100 rounded-full animate-ping absolute opacity-75`}></div>
+        <div className={`w-16 h-16 bg-white rounded-full flex items-center justify-center relative z-10 shadow-sm border border-${themeColor}-50`}>
+          <Sparkles className={`w-8 h-8 text-${themeColor}-600 animate-pulse`} />
+        </div>
+        <h3 className="mt-6 text-xl font-bold text-slate-800">{translations[language].loading_checking_auth || '验证登录状态...'}</h3>
+      </div>
+    );
+  }
+
+  // 如果未认证，显示登录界面
+  if (!isAuthenticated) {
+    return <AuthView />;
   }
 
   // Calculate Opacity for Dual Layers
@@ -717,6 +739,15 @@ function App() {
       </div>
       
     </div>
+  );
+}
+
+// 包装App内容在AuthProvider中
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
