@@ -82,21 +82,22 @@ const authFetch = async (url: string, options: RequestInit = {}): Promise<Respon
 };
 
 export const register = async (email: string, password: string): Promise<AuthResponse> => {
+  // 用邮箱前缀作为用户名
+  const username = email.split('@')[0];
+  
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, username, password }),
   });
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Registration failed');
+    throw new Error(error.detail || error.error || 'Registration failed');
   }
   
-  const data: AuthResponse = await response.json();
-  saveTokens(data.accessToken, data.refreshToken);
-  saveUser(data.user);
-  return data;
+  // 注册成功后自动登录获取 token
+  return login(email, password);
 };
 
 export const login = async (email: string, password: string): Promise<AuthResponse> => {
@@ -108,13 +109,19 @@ export const login = async (email: string, password: string): Promise<AuthRespon
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Login failed');
+    throw new Error(error.detail || error.error || 'Login failed');
   }
   
-  const data: AuthResponse = await response.json();
-  saveTokens(data.accessToken, data.refreshToken);
-  saveUser(data.user);
-  return data;
+  const data = await response.json();
+  // 后端返回 snake_case，转换为 camelCase
+  const result: AuthResponse = {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    user: { id: 0, email }, // 后端登录不返回 user，先用占位
+  };
+  saveTokens(result.accessToken, result.refreshToken);
+  saveUser(result.user);
+  return result;
 };
 
 export const logout = async (): Promise<void> => {
@@ -140,7 +147,7 @@ export const refreshAccessToken = async (): Promise<boolean> => {
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
     
     if (!response.ok) {
@@ -149,7 +156,8 @@ export const refreshAccessToken = async (): Promise<boolean> => {
     }
     
     const data = await response.json();
-    localStorage.setItem(TOKEN_KEY, data.accessToken);
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
     return true;
   } catch (error) {
     clearAuth();

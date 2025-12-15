@@ -16,8 +16,8 @@ export const ConnectionTest: React.FC = () => {
     // 尝试多个可能的地址
     const urls = [
       `${API_BASE_URL}/health`,
-      'http://10.0.2.2:3001/api/health',
-      'http://192.168.1.113:3001/api/health'
+      'http://10.0.2.2:8000/api/health',
+      'http://10.0.2.2:8000/health'
     ];
     
     let success = false;
@@ -64,8 +64,7 @@ export const ConnectionTest: React.FC = () => {
     // 尝试使用不同的URLs
     const urls = [
       `${API_BASE_URL}/auth/register`,
-      'http://10.0.2.2:3001/api/auth/register',
-      'http://192.168.1.113:3001/api/auth/register'
+      'http://10.0.2.2:8000/api/auth/register'
     ];
     
     let success = false;
@@ -86,6 +85,7 @@ export const ConnectionTest: React.FC = () => {
           },
           body: JSON.stringify({
             email: email,
+            username: `test${timestamp}`,
             password: 'testpassword123'
           }),
         });
