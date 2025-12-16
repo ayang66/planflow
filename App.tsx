@@ -567,21 +567,20 @@ function AppContent() {
     return <SplashScreen language={language} />;
   }
 
-  // 如果正在加载认证状态，显示加载画面
-  if (isLoading) {
-    return (
-      <div className="flex flex-col h-screen max-w-2xl mx-auto items-center justify-center">
-        <div className={`w-16 h-16 bg-${themeColor}-100 rounded-full animate-ping absolute opacity-75`}></div>
-        <div className={`w-16 h-16 bg-white rounded-full flex items-center justify-center relative z-10 shadow-sm border border-${themeColor}-50`}>
-          <Sparkles className={`w-8 h-8 text-${themeColor}-600 animate-pulse`} />
-        </div>
-        <h3 className="mt-6 text-xl font-bold text-slate-800">{translations[language].loading_checking_auth || '验证登录状态...'}</h3>
-      </div>
-    );
-  }
-
-  // 如果未认证，显示登录界面
+  // 如果未认证，显示登录界面（不受 isLoading 影响，避免登录失败时组件被卸载）
   if (!isAuthenticated) {
+    // 只在初始加载时显示加载画面
+    if (isLoading) {
+      return (
+        <div className="flex flex-col h-screen max-w-2xl mx-auto items-center justify-center bg-slate-50">
+          <div className={`w-16 h-16 bg-${themeColor}-100 rounded-full animate-ping absolute opacity-75`}></div>
+          <div className={`w-16 h-16 bg-white rounded-full flex items-center justify-center relative z-10 shadow-sm border border-${themeColor}-50`}>
+            <Sparkles className={`w-8 h-8 text-${themeColor}-600 animate-pulse`} />
+          </div>
+          <h3 className="mt-6 text-xl font-bold text-slate-800">{translations[language].loading_checking_auth || '验证登录状态...'}</h3>
+        </div>
+      );
+    }
     return <AuthView />;
   }
 

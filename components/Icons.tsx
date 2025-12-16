@@ -40,6 +40,7 @@ import {
   Plus,
   Save,
   LogOut,
+  LogIn,
   Bell,
   BellRing,
   BellOff,
@@ -56,7 +57,12 @@ import {
   Upload,
   Crop,
   Move,
-  Maximize
+  Maximize,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  UserPlus
 } from 'lucide-react';
 
 export { 
@@ -99,6 +105,7 @@ export {
   Plus,
   Save,
   LogOut,
+  LogIn,
   Bell,
   BellRing,
   BellOff,
@@ -115,5 +122,10 @@ export {
   Upload,
   Crop,
   Move,
-  Maximize
+  Maximize,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  UserPlus
 };

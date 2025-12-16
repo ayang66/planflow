@@ -44,26 +44,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const handleLogin = async (email: string, password: string) => {
-    setIsLoading(true);
     try {
       const authResponse = await login(email, password);
       setUser(authResponse.user);
     } catch (error) {
+      // 不设置 isLoading，让 AuthView 自己管理 loading 状态
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleRegister = async (email: string, password: string) => {
-    setIsLoading(true);
     try {
       const authResponse = await register(email, password);
       setUser(authResponse.user);
     } catch (error) {
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 

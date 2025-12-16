@@ -82,18 +82,32 @@ const authFetch = async (url: string, options: RequestInit = {}): Promise<Respon
 };
 
 export const register = async (email: string, password: string): Promise<AuthResponse> => {
-  // 用邮箱前缀作为用户名
-  const username = email.split('@')[0];
+  let response: Response;
   
-  const response = await fetch(`${API_BASE_URL}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, username, password }),
-  });
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (networkError) {
+    console.error('Network error during register:', networkError);
+    throw new Error('网络连接失败，请检查网络后重试');
+  }
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || error.error || 'Registration failed');
+    let errorMessage = 'Registration failed';
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || error.error || error.message || errorMessage;
+    } catch {
+      if (response.status === 400) {
+        errorMessage = 'Email already registered';
+      } else if (response.status >= 500) {
+        errorMessage = 'Server error';
+      }
+    }
+    throw new Error(errorMessage);
   }
   
   // 注册成功后自动登录获取 token
@@ -101,15 +115,35 @@ export const register = async (email: string, password: string): Promise<AuthRes
 };
 
 export const login = async (email: string, password: string): Promise<AuthResponse> => {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
+  let response: Response;
+  
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (networkError) {
+    console.error('Network error during login:', networkError);
+    throw new Error('网络连接失败，请检查网络后重试');
+  }
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || error.error || 'Login failed');
+    let errorMessage = 'Login failed';
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || error.error || error.message || errorMessage;
+    } catch {
+      // 无法解析 JSON，使用状态码
+      if (response.status === 401) {
+        errorMessage = 'Incorrect email or password';
+      } else if (response.status === 404) {
+        errorMessage = 'User not found';
+      } else if (response.status >= 500) {
+        errorMessage = 'Server error';
+      }
+    }
+    throw new Error(errorMessage);
   }
   
   const data = await response.json();
