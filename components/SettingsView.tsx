@@ -167,7 +167,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ language, setLanguag
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">账户信息</h3>
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-slate-800">{user?.email}</p>
+                <p className="font-medium text-slate-800">{user?.email || user?.phone || '未知用户'}</p>
                 <p className="text-xs text-slate-500">已登录</p>
               </div>
               <button

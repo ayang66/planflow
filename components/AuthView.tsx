@@ -1,25 +1,60 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Sparkles, Loader2, Mail, Lock, Eye, EyeOff, UserPlus, LogIn } from './Icons';
+import { Sparkles, Loader2, Mail, Lock, Eye, EyeOff, UserPlus, LogIn, Phone } from './Icons';
+
+type LoginType = 'email' | 'phone';
 
 export const AuthView: React.FC = () => {
   const { login: authLogin, register: authRegister } = useAuth();
   const { themeColor } = useTheme();
   const [isLogin, setIsLogin] = useState(true);
+  const [loginType, setLoginType] = useState<LoginType>('email');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const credential = loginType === 'email' ? email : phone;
+
+  const validatePhone = (phone: string): boolean => {
+    return /^1[3-9]\d{9}$/.test(phone);
+  };
+
+  const validateEmail = (email: string): boolean => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!email || !password) {
-      setError('请填写邮箱和密码');
+    // 验证输入
+    if (loginType === 'email') {
+      if (!email) {
+        setError('请填写邮箱');
+        return;
+      }
+      if (!validateEmail(email)) {
+        setError('邮箱格式不正确');
+        return;
+      }
+    } else {
+      if (!phone) {
+        setError('请填写手机号');
+        return;
+      }
+      if (!validatePhone(phone)) {
+        setError('手机号格式不正确');
+        return;
+      }
+    }
+
+    if (!password) {
+      setError('请填写密码');
       return;
     }
 
@@ -37,35 +72,16 @@ export const AuthView: React.FC = () => {
 
     try {
       if (isLogin) {
-        await authLogin(email, password);
+        await authLogin(credential, password, loginType);
       } else {
-        await authRegister(email, password);
+        await authRegister(credential, password, loginType);
       }
     } catch (err) {
       console.error('Auth error:', err);
-      console.log('Error type:', typeof err);
-      console.log('Error message:', err instanceof Error ? err.message : String(err));
       let errorMessage = '操作失败，请重试';
 
       if (err instanceof Error) {
-        const msg = err.message.toLowerCase();
-        if (msg.includes('incorrect') || msg.includes('password') || msg.includes('invalid')) {
-          errorMessage = '邮箱或密码错误';
-        } else if (msg.includes('not found') || msg.includes('no user')) {
-          errorMessage = '用户不存在，请先注册';
-        } else if (msg.includes('already') || msg.includes('exist') || msg.includes('registered')) {
-          errorMessage = '该邮箱已被注册';
-        } else if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch')) {
-          errorMessage = '网络连接失败，请检查网络';
-        } else if (msg.includes('timeout')) {
-          errorMessage = '请求超时，请稍后重试';
-        } else if (msg.includes('401') || msg.includes('unauthorized')) {
-          errorMessage = '认证失败，请重新登录';
-        } else if (msg.includes('500') || msg.includes('server')) {
-          errorMessage = '服务器错误，请稍后重试';
-        } else {
-          errorMessage = err.message;
-        }
+        errorMessage = err.message;
       }
 
       setError(errorMessage);
@@ -95,7 +111,7 @@ export const AuthView: React.FC = () => {
       <div className="flex-1 px-6 pt-14 pb-8">
         <div className="max-w-sm mx-auto">
           {/* 标题 */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <h1 className="text-2xl font-bold text-slate-900 mb-2">
               {isLogin ? '欢迎回来' : '创建账户'}
             </h1>
@@ -104,9 +120,35 @@ export const AuthView: React.FC = () => {
             </p>
           </div>
 
+          {/* 登录方式切换 */}
+          <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
+            <button
+              type="button"
+              onClick={() => { setLoginType('email'); setError(''); }}
+              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
+                loginType === 'email' 
+                  ? `bg-white text-${themeColor}-600 shadow-sm` 
+                  : 'text-slate-500'
+              }`}
+            >
+              邮箱登录
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginType('phone'); setError(''); }}
+              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
+                loginType === 'phone' 
+                  ? `bg-white text-${themeColor}-600 shadow-sm` 
+                  : 'text-slate-500'
+              }`}
+            >
+              手机登录
+            </button>
+          </div>
+
           {/* 错误提示 */}
           {error && (
-            <div className={`mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-3 animate-in slide-in-from-top-2 duration-300`}>
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-3 animate-in slide-in-from-top-2 duration-300">
               <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0" />
               {error}
             </div>
@@ -114,21 +156,38 @@ export const AuthView: React.FC = () => {
 
           {/* 表单 */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* 邮箱 */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700 ml-1">邮箱</label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={`w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-${themeColor}-500 focus:border-transparent outline-none transition-all text-slate-900 placeholder:text-slate-400`}
-                  placeholder="your@email.com"
-                  disabled={loading}
-                />
+            {/* 邮箱/手机号 */}
+            {loginType === 'email' ? (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 ml-1">邮箱</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-${themeColor}-500 focus:border-transparent outline-none transition-all text-slate-900 placeholder:text-slate-400`}
+                    placeholder="your@email.com"
+                    disabled={loading}
+                  />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 ml-1">手机号</label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                    className={`w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-${themeColor}-500 focus:border-transparent outline-none transition-all text-slate-900 placeholder:text-slate-400`}
+                    placeholder="请输入手机号"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* 密码 */}
             <div className="space-y-2">

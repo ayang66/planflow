@@ -62,7 +62,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  UserPlus
+  UserPlus,
+  Phone
 } from 'lucide-react';
 
 export { 
@@ -127,5 +128,6 @@ export {
   Lock,
   Eye,
   EyeOff,
-  UserPlus
+  UserPlus,
+  Phone
 };

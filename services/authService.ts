@@ -5,13 +5,15 @@ interface AuthResponse {
   refreshToken: string;
   user: {
     id: number;
-    email: string;
+    email?: string;
+    phone?: string;
   };
 }
 
 interface UserInfo {
   id: number;
-  email: string;
+  email?: string;
+  phone?: string;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -34,11 +36,11 @@ export const getRefreshToken = (): string | null => {
   return localStorage.getItem(REFRESH_TOKEN_KEY);
 };
 
-export const saveUser = (user: { id: number; email: string }): void => {
+export const saveUser = (user: { id: number; email?: string; phone?: string }): void => {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
 
-export const getUser = (): { id: number; email: string } | null => {
+export const getUser = (): { id: number; email?: string; phone?: string } | null => {
   const user = localStorage.getItem(USER_KEY);
   return user ? JSON.parse(user) : null;
 };
@@ -81,14 +83,25 @@ const authFetch = async (url: string, options: RequestInit = {}): Promise<Respon
   return response;
 };
 
-export const register = async (email: string, password: string): Promise<AuthResponse> => {
+// 登录类型
+type LoginType = 'email' | 'phone';
+
+export const register = async (
+  credential: string, 
+  password: string, 
+  type: LoginType = 'email'
+): Promise<AuthResponse> => {
   let response: Response;
+  
+  const body = type === 'email' 
+    ? { email: credential, password }
+    : { phone: credential, password };
   
   try {
     response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     });
   } catch (networkError) {
     console.error('Network error during register:', networkError);
@@ -96,32 +109,40 @@ export const register = async (email: string, password: string): Promise<AuthRes
   }
   
   if (!response.ok) {
-    let errorMessage = 'Registration failed';
+    let errorMessage = '注册失败';
     try {
       const error = await response.json();
       errorMessage = error.detail || error.error || error.message || errorMessage;
     } catch {
       if (response.status === 400) {
-        errorMessage = 'Email already registered';
+        errorMessage = type === 'email' ? '该邮箱已被注册' : '该手机号已被注册';
       } else if (response.status >= 500) {
-        errorMessage = 'Server error';
+        errorMessage = '服务器错误';
       }
     }
     throw new Error(errorMessage);
   }
   
   // 注册成功后自动登录获取 token
-  return login(email, password);
+  return login(credential, password, type);
 };
 
-export const login = async (email: string, password: string): Promise<AuthResponse> => {
+export const login = async (
+  credential: string, 
+  password: string, 
+  type: LoginType = 'email'
+): Promise<AuthResponse> => {
   let response: Response;
+  
+  const body = type === 'email' 
+    ? { email: credential, password }
+    : { phone: credential, password };
   
   try {
     response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     });
   } catch (networkError) {
     console.error('Network error during login:', networkError);
@@ -129,29 +150,29 @@ export const login = async (email: string, password: string): Promise<AuthRespon
   }
   
   if (!response.ok) {
-    let errorMessage = 'Login failed';
+    let errorMessage = '登录失败';
     try {
       const error = await response.json();
       errorMessage = error.detail || error.error || error.message || errorMessage;
     } catch {
-      // 无法解析 JSON，使用状态码
       if (response.status === 401) {
-        errorMessage = 'Incorrect email or password';
+        errorMessage = '账号或密码错误';
       } else if (response.status === 404) {
-        errorMessage = 'User not found';
+        errorMessage = '用户不存在';
       } else if (response.status >= 500) {
-        errorMessage = 'Server error';
+        errorMessage = '服务器错误';
       }
     }
     throw new Error(errorMessage);
   }
   
   const data = await response.json();
-  // 后端返回 snake_case，转换为 camelCase
   const result: AuthResponse = {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
-    user: { id: 0, email }, // 后端登录不返回 user，先用占位
+    user: type === 'email' 
+      ? { id: 0, email: credential }
+      : { id: 0, phone: credential },
   };
   saveTokens(result.accessToken, result.refreshToken);
   saveUser(result.user);

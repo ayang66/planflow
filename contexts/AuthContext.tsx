@@ -3,17 +3,20 @@ import { isAuthenticated, getCurrentUser, login, register, logout } from '../ser
 
 interface User {
   id: number;
-  email: string;
+  email?: string;
+  phone?: string;
   createdAt?: string;
   lastLoginAt?: string;
 }
+
+type LoginType = 'email' | 'phone';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  login: (credential: string, password: string, type?: LoginType) => Promise<void>;
+  register: (credential: string, password: string, type?: LoginType) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -43,19 +46,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkAuthStatus();
   }, []);
 
-  const handleLogin = async (email: string, password: string) => {
+  const handleLogin = async (credential: string, password: string, type: LoginType = 'email') => {
     try {
-      const authResponse = await login(email, password);
+      const authResponse = await login(credential, password, type);
       setUser(authResponse.user);
     } catch (error) {
-      // 不设置 isLoading，让 AuthView 自己管理 loading 状态
       throw error;
     }
   };
 
-  const handleRegister = async (email: string, password: string) => {
+  const handleRegister = async (credential: string, password: string, type: LoginType = 'email') => {
     try {
-      const authResponse = await register(email, password);
+      const authResponse = await register(credential, password, type);
       setUser(authResponse.user);
     } catch (error) {
       throw error;
@@ -69,7 +71,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(null);
     } catch (error) {
       console.error('Logout error:', error);
-      // 即使后端登出失败，也清除本地状态
       setUser(null);
     }
     setIsLoading(false);
