@@ -57,13 +57,19 @@ async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
     return result.scalar_one_or_none()
 
 
-async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User]:
-    result = await db.execute(select(User).where(User.username == username))
+async def get_user_by_phone(db: AsyncSession, phone: str) -> Optional[User]:
+    result = await db.execute(select(User).where(User.phone == phone))
     return result.scalar_one_or_none()
 
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> Optional[User]:
-    user = await get_user_by_email(db, email)
+async def authenticate_user(db: AsyncSession, email: Optional[str], phone: Optional[str], password: str) -> Optional[User]:
+    """支持邮箱或手机号登录"""
+    user = None
+    if email:
+        user = await get_user_by_email(db, email)
+    elif phone:
+        user = await get_user_by_phone(db, phone)
+    
     if not user or not verify_password(password, user.password_hash):
         return None
     return user
