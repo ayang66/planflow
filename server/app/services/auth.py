@@ -10,6 +10,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
+from app.services.redis import store_refresh_token, verify_refresh_token_in_redis, revoke_refresh_token
 
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -34,14 +35,21 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
-def create_refresh_token(data: dict) -> str:
+def create_refresh_token(data: dict, store_in_redis: bool = True) -> str:
     to_encode = data.copy()
+    user_id = to_encode.get("sub")
     # 确保 sub 是字符串
     if "sub" in to_encode:
         to_encode["sub"] = str(to_encode["sub"])
     expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
     to_encode.update({"exp": expire, "type": "refresh"})
-    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    token = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    
+    # 存储到 Redis
+    if store_in_redis and user_id:
+        store_refresh_token(int(user_id), token, settings.refresh_token_expire_days)
+    
+    return token
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
@@ -100,12 +108,24 @@ async def get_current_user(
 async def verify_refresh_token(token: str, db: AsyncSession) -> Optional[User]:
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: int = payload.get("sub")
+        user_id_str = payload.get("sub")
+        user_id: int = int(user_id_str) if user_id_str else None
         token_type: str = payload.get("type")
         if user_id is None or token_type != "refresh":
             return None
+        
+        # 验证 token 是否在 Redis 中（未被撤销）
+        if not verify_refresh_token_in_redis(user_id, token):
+            print(f"Refresh token not found in Redis for user {user_id}")
+            return None
+            
     except JWTError:
         return None
 
     result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
+
+
+async def logout_user(user_id: int, refresh_token: str) -> bool:
+    """登出用户，撤销 refresh token"""
+    return revoke_refresh_token(user_id, refresh_token)

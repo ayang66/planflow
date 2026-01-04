@@ -15,3 +15,4 @@ class User(Base):
     last_login_at = Column(DateTime, nullable=True)
 
     plans = relationship("Plan", back_populates="user", cascade="all, delete-orphan")
+    token_usages = relationship("TokenUsage", back_populates="user", cascade="all, delete-orphan")

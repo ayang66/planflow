@@ -4,12 +4,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.routers import auth, plans, ai
+from app.services.redis import check_redis_connection
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
+    
+    # 检查 Redis 连接
+    if check_redis_connection():
+        print("✅ Redis connected")
+    else:
+        print("⚠️ Redis not available, refresh tokens will not be persisted")
+    
     yield
     # Shutdown
 

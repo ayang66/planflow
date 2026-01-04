@@ -1,6 +1,6 @@
 import json
 import httpx
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from app.config import get_settings
 from app.schemas.plan import TaskCreate
 
@@ -9,8 +9,8 @@ settings = get_settings()
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 
-async def call_deepseek(system_prompt: str, user_prompt: str) -> str:
-    """调用 DeepSeek API"""
+async def call_deepseek(system_prompt: str, user_prompt: str) -> Tuple[str, dict]:
+    """调用 DeepSeek API，返回 (内容, token使用信息)"""
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
             DEEPSEEK_API_URL,
@@ -29,7 +29,16 @@ async def call_deepseek(system_prompt: str, user_prompt: str) -> str:
         )
         response.raise_for_status()
         data = response.json()
-        return data["choices"][0]["message"]["content"]
+        
+        # 提取 token 使用信息
+        usage = data.get("usage", {})
+        token_info = {
+            "model": "deepseek-chat",
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+        }
+        
+        return data["choices"][0]["message"]["content"], token_info
 
 
 def parse_json_response(text: str) -> any:
@@ -38,8 +47,8 @@ def parse_json_response(text: str) -> any:
     return json.loads(clean)
 
 
-async def check_goal_clarity(goal: str) -> dict:
-    """检查目标是否足够清晰"""
+async def check_goal_clarity(goal: str) -> Tuple[dict, dict]:
+    """检查目标是否足够清晰，返回 (结果, token信息)"""
     system_prompt = """你是一个效率教练。分析用户目标是否有足够细节来制定计划。
 只返回 JSON 格式: {"is_sufficient": boolean, "clarifying_question": "string or null"}"""
 
@@ -61,11 +70,11 @@ async def check_goal_clarity(goal: str) -> dict:
 """
 
     try:
-        response = await call_deepseek(system_prompt, user_prompt)
-        return parse_json_response(response)
+        response, token_info = await call_deepseek(system_prompt, user_prompt)
+        return parse_json_response(response), token_info
     except Exception as e:
         print(f"Clarity check error: {e}")
-        return {"is_sufficient": True}
+        return {"is_sufficient": True}, {"model": "deepseek-chat", "prompt_tokens": 0, "completion_tokens": 0}
 
 
 async def decompose_goal(
@@ -73,8 +82,8 @@ async def decompose_goal(
     constraints: Optional[str] = None,
     force_reminder_style: Optional[str] = None,
     existing_schedule: Optional[str] = None,
-) -> List[TaskCreate]:
-    """将目标分解为具体任务"""
+) -> Tuple[List[TaskCreate], dict]:
+    """将目标分解为具体任务，返回 (任务列表, token信息)"""
     
     system_prompt = """你是一个专业的项目经理和效率教练。将用户目标分解为具体可执行的任务。
 返回 JSON 数组格式，每个任务包含:
@@ -110,17 +119,17 @@ reminder_style 规则:
     if constraints:
         user_prompt += f"\n\n用户约束:\n{constraints}"
 
-    response = await call_deepseek(system_prompt, user_prompt)
+    response, token_info = await call_deepseek(system_prompt, user_prompt)
     tasks_data = parse_json_response(response)
-    return [TaskCreate(**task) for task in tasks_data]
+    return [TaskCreate(**task) for task in tasks_data], token_info
 
 
 async def modify_plan(
     current_tasks: List[dict],
     instruction: str,
     current_day_offset: int = 0,
-) -> List[TaskCreate]:
-    """AI 辅助修改计划"""
+) -> Tuple[List[TaskCreate], dict]:
+    """AI 辅助修改计划，返回 (任务列表, token信息)"""
     
     completed = [t for t in current_tasks if t.get("is_completed")]
     active = [t for t in current_tasks if not t.get("is_completed")]
@@ -139,6 +148,6 @@ async def modify_plan(
 根据指令修改活跃任务列表，只输出活跃任务的 JSON 数组。
 """
 
-    response = await call_deepseek(system_prompt, user_prompt)
+    response, token_info = await call_deepseek(system_prompt, user_prompt)
     tasks_data = parse_json_response(response)
-    return [TaskCreate(**task) for task in tasks_data]
+    return [TaskCreate(**task) for task in tasks_data], token_info

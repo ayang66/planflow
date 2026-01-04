@@ -13,7 +13,8 @@ import { ClarificationModal } from './components/ClarificationModal';
 import { SplashScreen } from './components/SplashScreen';
 import { AuthView } from './components/AuthView';
 import { decomposeGoal, modifyPlan, checkGoalClarity } from './services/geminiService';
-import { downloadICSFile } from './services/calendarService';
+import { syncToCalendar } from './services/calendarService';
+import { fetchPlans, createPlan, deletePlan, updateTask as updateTaskApi, deleteTask as deleteTaskApi, addTaskToPlan } from './services/planService';
 import { LoadingState, Plan, Tab, TaskItem, ReminderSetting, ReminderStyle, Language } from './types';
 import { translations } from './utils/translations';
 import { useTheme } from './contexts/ThemeContext';
@@ -50,22 +51,9 @@ function AppContent() {
     question: string;
   } | null>(null);
   
-  // Initialize history from local storage
-  const [history, setHistory] = useState<Plan[]>(() => {
-    try {
-      const saved = localStorage.getItem('planflow_history');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.map((p: any) => ({
-          ...p,
-          startDate: p.startDate || p.createdAt
-        }));
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  });
+  // Initialize history - will be loaded from server after auth
+  const [history, setHistory] = useState<Plan[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
 
   // Background Transition State
   const targetBg = getBackgroundImage();
@@ -139,9 +127,36 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Save history whenever it changes
+  // Load plans from server when authenticated
   useEffect(() => {
-    localStorage.setItem('planflow_history', JSON.stringify(history));
+    const loadPlans = async () => {
+      if (isAuthenticated && !isLoading) {
+        setIsLoadingPlans(true);
+        try {
+          const plans = await fetchPlans();
+          setHistory(plans);
+        } catch (error) {
+          console.error('Failed to load plans:', error);
+          // 如果加载失败，尝试从 localStorage 恢复
+          try {
+            const saved = localStorage.getItem('planflow_history');
+            if (saved) {
+              setHistory(JSON.parse(saved));
+            }
+          } catch {}
+        } finally {
+          setIsLoadingPlans(false);
+        }
+      }
+    };
+    loadPlans();
+  }, [isAuthenticated, isLoading]);
+
+  // Backup to localStorage (as fallback)
+  useEffect(() => {
+    if (history.length > 0) {
+      localStorage.setItem('planflow_history', JSON.stringify(history));
+    }
   }, [history]);
 
   // Save language whenever it changes
@@ -281,11 +296,31 @@ function AppContent() {
 
   // --- Draft Management Actions ---
 
-  const handleConfirmDraft = () => {
+  const handleConfirmDraft = async () => {
     if (draftPlan) {
-      setCurrentPlan(draftPlan);
-      setSelectedDate(new Date(draftPlan.startDate));
-      setHistory(prev => [draftPlan, ...prev]);
+      try {
+        // 保存到数据库
+        const savedPlan = await createPlan(
+          draftPlan.goal,
+          draftPlan.tasks.map(t => ({
+            title: t.title,
+            description: t.description,
+            dayOffset: t.dayOffset,
+            startTime: t.startTime,
+            durationMinutes: t.durationMinutes,
+            reminderStyle: t.reminderStyle,
+          }))
+        );
+        setCurrentPlan(savedPlan);
+        setSelectedDate(new Date(savedPlan.startDate));
+        setHistory(prev => [savedPlan, ...prev]);
+      } catch (error) {
+        console.error('Failed to save plan:', error);
+        // 失败时仍然保存到本地
+        setCurrentPlan(draftPlan);
+        setSelectedDate(new Date(draftPlan.startDate));
+        setHistory(prev => [draftPlan, ...prev]);
+      }
       setDraftPlan(null);
       setActiveTab('plan');
     }
@@ -380,7 +415,8 @@ function AppContent() {
     }
   };
 
-  const handleUpdateTaskInPlan = (planId: string, taskId: string, updates: Partial<TaskItem>) => {
+  const handleUpdateTaskInPlan = async (planId: string, taskId: string, updates: Partial<TaskItem>) => {
+    // 先更新本地状态
     setHistory(prev => prev.map(plan => {
       if (plan.id !== planId) return plan;
       return {
@@ -398,9 +434,17 @@ function AppContent() {
           };
        });
     }
+
+    // 同步到服务器
+    try {
+      await updateTaskApi(planId, taskId, updates);
+    } catch (error) {
+      console.error('Failed to update task:', error);
+    }
   };
 
-  const handleDeleteTaskInPlan = (planId: string, taskId: string) => {
+  const handleDeleteTaskInPlan = async (planId: string, taskId: string) => {
+    // 先更新本地状态
     setHistory(prev => prev.map(plan => {
       if (plan.id !== planId) return plan;
       return {
@@ -418,15 +462,21 @@ function AppContent() {
           };
        });
     }
+
+    // 同步到服务器
+    try {
+      await deleteTaskApi(planId, taskId);
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+    }
   };
 
-  const handleAddTaskToPlan = (
+  const handleAddTaskToPlan = async (
     planId: string | 'NEW', 
     taskData: Omit<TaskItem, 'id' | 'dayOffset'> & { date: Date }, 
     newGoalName?: string
   ) => {
     const now = Date.now();
-    const taskId = `manual_${now}`;
 
     const getOffset = (planStart: number, taskDate: Date) => {
       const start = new Date(planStart);
@@ -438,55 +488,82 @@ function AppContent() {
     };
 
     if (planId === 'NEW' && newGoalName) {
-      const newPlanStart = Date.now();
-      const offset = getOffset(newPlanStart, taskData.date);
-
-      const newTask: TaskItem = {
-        id: taskId,
+      // 创建新计划
+      const offset = getOffset(now, taskData.date);
+      const taskToCreate = {
         title: taskData.title,
         description: taskData.description,
         startTime: taskData.startTime,
         durationMinutes: taskData.durationMinutes,
         dayOffset: offset,
-        isCompleted: false,
         reminderStyle: taskData.reminderStyle || 'ALARM'
       };
 
-      const newPlan: Plan = {
-        id: now.toString(),
-        createdAt: now,
-        startDate: newPlanStart,
-        goal: newGoalName,
-        tasks: [newTask]
+      try {
+        const savedPlan = await createPlan(newGoalName, [taskToCreate]);
+        setHistory(prev => [savedPlan, ...prev]);
+        setCurrentPlan(savedPlan);
+      } catch (error) {
+        console.error('Failed to create plan:', error);
+        // 失败时本地创建
+        const newTask: TaskItem = {
+          id: `manual_${now}`,
+          ...taskToCreate,
+          isCompleted: false
+        };
+        const newPlan: Plan = {
+          id: now.toString(),
+          createdAt: now,
+          startDate: now,
+          goal: newGoalName,
+          tasks: [newTask]
+        };
+        setHistory(prev => [newPlan, ...prev]);
+        setCurrentPlan(newPlan);
+      }
+    } else {
+      // 添加任务到现有计划
+      const plan = history.find(p => p.id === planId);
+      if (!plan) return;
+
+      const offset = getOffset(plan.startDate, taskData.date);
+      const taskToAdd = {
+        title: taskData.title,
+        description: taskData.description,
+        startTime: taskData.startTime,
+        durationMinutes: taskData.durationMinutes,
+        dayOffset: offset,
+        reminderStyle: taskData.reminderStyle || 'ALARM'
       };
 
-      setHistory(prev => [newPlan, ...prev]);
-      setCurrentPlan(newPlan);
-    } else {
-      setHistory(prev => prev.map(plan => {
-        if (plan.id !== planId) return plan;
-        
-        const offset = getOffset(plan.startDate, taskData.date);
+      try {
+        const updatedPlan = await addTaskToPlan(planId, taskToAdd);
+        setHistory(prev => prev.map(p => p.id === planId ? updatedPlan : p));
+        if (currentPlan?.id === planId) {
+          setCurrentPlan(updatedPlan);
+        }
+      } catch (error) {
+        console.error('Failed to add task:', error);
+        // 失败时本地添加
         const newTask: TaskItem = {
-          id: taskId,
-          title: taskData.title,
-          description: taskData.description,
-          startTime: taskData.startTime,
-          durationMinutes: taskData.durationMinutes,
-          dayOffset: offset,
-          isCompleted: false,
-          reminderStyle: taskData.reminderStyle || 'ALARM'
+          id: `manual_${now}`,
+          ...taskToAdd,
+          isCompleted: false
         };
-
-        return {
-          ...plan,
-          tasks: [...plan.tasks, newTask]
-        };
-      }));
+        setHistory(prev => prev.map(p => {
+          if (p.id !== planId) return p;
+          return { ...p, tasks: [...p.tasks, newTask] };
+        }));
+      }
     }
   };
 
-  const handleDeletePlan = (id: string) => {
+  const handleDeletePlan = async (id: string) => {
+    try {
+      await deletePlan(id);
+    } catch (error) {
+      console.error('Failed to delete plan from server:', error);
+    }
     setHistory(prev => prev.filter(p => p.id !== id));
     if (currentPlan?.id === id) {
       setCurrentPlan(null);
@@ -502,17 +579,31 @@ function AppContent() {
     setActiveTab('plan');
   };
 
-  const handleToggleTaskCompletion = (planId: string, taskId: string) => {
-    setHistory(prev => prev.map(plan => {
-        if (plan.id !== planId) return plan;
+  const handleToggleTaskCompletion = async (planId: string, taskId: string) => {
+    const plan = history.find(p => p.id === planId);
+    const task = plan?.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const newCompleted = !task.isCompleted;
+    
+    // 先更新本地状态
+    setHistory(prev => prev.map(p => {
+        if (p.id !== planId) return p;
         return {
-            ...plan,
-            tasks: plan.tasks.map(task => {
-                if (task.id !== taskId) return task;
-                return { ...task, isCompleted: !task.isCompleted };
+            ...p,
+            tasks: p.tasks.map(t => {
+                if (t.id !== taskId) return t;
+                return { ...t, isCompleted: newCompleted };
             })
         };
     }));
+
+    // 同步到服务器
+    try {
+      await updateTaskApi(planId, taskId, { isCompleted: newCompleted });
+    } catch (error) {
+      console.error('Failed to sync task completion:', error);
+    }
   };
 
   const handleDownload = () => {
@@ -545,7 +636,7 @@ function AppContent() {
                   <Calendar className="w-3.5 h-3.5" />
                   <span className="text-xs font-semibold">{t.plan_calendar_today}</span>
                </button>
-               {currentPlan && (
+               {history.length > 0 && (
                  <button 
                     onClick={handleDownload}
                     className={`flex items-center gap-1.5 px-3 py-1.5 bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white rounded-lg transition-all shadow-sm shadow-${themeColor}-200 active:scale-95`}

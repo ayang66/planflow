@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     gemini_api_key: str = ""
     deepseek_api_key: str = ""
+    
+    # Redis 配置
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
+    redis_password: str = ""
 
     class Config:
         env_file = ".env"

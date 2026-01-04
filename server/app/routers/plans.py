@@ -7,7 +7,7 @@ from typing import List
 from app.database import get_db
 from app.models.user import User
 from app.models.plan import Plan, Task
-from app.schemas.plan import PlanCreate, PlanResponse, TaskUpdate
+from app.schemas.plan import PlanCreate, PlanResponse, TaskUpdate, TaskCreate
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/plans", tags=["plans"])
@@ -114,6 +114,65 @@ async def update_task(
     for field, value in update_data.items():
         setattr(task, field, value)
 
+    await db.commit()
+
+    # Return updated plan
+    result = await db.execute(
+        select(Plan).where(Plan.id == plan_id).options(selectinload(Plan.tasks))
+    )
+    return result.scalar_one()
+
+
+@router.post("/{plan_id}/tasks", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
+async def add_task(
+    plan_id: int,
+    task_data: TaskCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Verify plan ownership
+    result = await db.execute(
+        select(Plan).where(Plan.id == plan_id, Plan.user_id == current_user.id)
+    )
+    plan = result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    task = Task(plan_id=plan_id, **task_data.model_dump())
+    db.add(task)
+    await db.commit()
+
+    # Return updated plan
+    result = await db.execute(
+        select(Plan).where(Plan.id == plan_id).options(selectinload(Plan.tasks))
+    )
+    return result.scalar_one()
+
+
+@router.delete("/{plan_id}/tasks/{task_id}", response_model=PlanResponse)
+async def delete_task(
+    plan_id: int,
+    task_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Verify plan ownership
+    result = await db.execute(
+        select(Plan).where(Plan.id == plan_id, Plan.user_id == current_user.id)
+    )
+    plan = result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    # Get and delete task
+    result = await db.execute(
+        select(Task).where(Task.id == task_id, Task.plan_id == plan_id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    await db.delete(task)
     await db.commit()
 
     # Return updated plan

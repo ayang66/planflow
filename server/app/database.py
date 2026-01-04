@@ -18,5 +18,11 @@ async def get_db():
 
 
 async def init_db():
-    # 使用现有的 PostgreSQL 表，不自动创建
-    pass
+    # 导入所有模型以确保它们被注册
+    from app.models.user import User
+    from app.models.plan import Plan, Task
+    from app.models.token_usage import TokenUsage
+    
+    # 创建所有表
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
