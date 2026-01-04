@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.models.user import User
@@ -80,4 +81,17 @@ async def refresh_token(token_data: TokenRefresh, db: AsyncSession = Depends(get
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.post("/upgrade", response_model=UserResponse)
+async def upgrade_to_pro(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """升级到专业版（模拟支付成功后调用）"""
+    current_user.is_pro = True
+    current_user.pro_expires_at = datetime.utcnow() + timedelta(days=365)  # 一年有效期
+    await db.commit()
+    await db.refresh(current_user)
     return current_user

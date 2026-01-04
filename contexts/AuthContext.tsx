@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { isAuthenticated, getCurrentUser, login, register, logout } from '../services/authService';
+import { isAuthenticated, getCurrentUser, login, register, logout, upgradeToPro } from '../services/authService';
 
 interface User {
   id: number;
   email?: string;
   phone?: string;
-  createdAt?: string;
-  lastLoginAt?: string;
+  is_pro?: boolean;
+  pro_expires_at?: string;
+  created_at?: string;
 }
 
 type LoginType = 'email' | 'phone';
@@ -15,10 +16,12 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isPro: boolean;
   login: (credential: string, password: string, type?: LoginType) => Promise<void>;
   register: (credential: string, password: string, type?: LoginType) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  upgrade: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,15 +91,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const handleUpgrade = async () => {
+    try {
+      const updatedUser = await upgradeToPro();
+      setUser(updatedUser);
+    } catch (error) {
+      console.error('Upgrade error:', error);
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
       isLoading,
       isAuthenticated: !!user,
+      isPro: user?.is_pro || false,
       login: handleLogin,
       register: handleRegister,
       logout: handleLogout,
-      refreshUser
+      refreshUser,
+      upgrade: handleUpgrade
     }}>
       {children}
     </AuthContext.Provider>

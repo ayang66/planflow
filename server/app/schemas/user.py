@@ -44,6 +44,8 @@ class UserResponse(BaseModel):
     id: int
     email: Optional[str] = None
     phone: Optional[str] = None
+    is_pro: bool = False
+    pro_expires_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

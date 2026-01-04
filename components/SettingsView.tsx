@@ -22,8 +22,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ language, setLanguag
     bgOpacity, setBgOpacity,
     customBgImage, setCustomBgImage
   } = useTheme();
-  const { user, logout: authLogout } = useAuth();
+  const { user, isPro: userIsPro, logout: authLogout, upgrade: authUpgrade } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  
+  // 使用服务器的 isPro 状态，如果没有则使用本地状态
+  const isProUser = userIsPro || isPro;
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -111,13 +114,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ language, setLanguag
     setShowPaymentModal(true);
   };
 
-  const processPayment = (method: 'VISA' | 'PAYPAL') => {
+  const processPayment = async (method: 'VISA' | 'PAYPAL') => {
     setProcessing(true);
-    setTimeout(() => {
-      setProcessing(false);
-      setIsPro(true);
+    try {
+      // 模拟支付延迟
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      // 调用后端升级 API
+      await authUpgrade();
       setShowPaymentModal(false);
-    }, 2000);
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('升级失败，请重试');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -192,8 +202,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ language, setLanguag
         </div>
 
         {/* Plan Status Card */}
-        <div className={`rounded-2xl p-6 relative overflow-hidden ${isPro ? 'bg-gradient-to-br from-slate-900 to-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-900 shadow-sm'}`}>
-           {isPro && (
+        <div className={`rounded-2xl p-6 relative overflow-hidden ${isProUser ? 'bg-gradient-to-br from-slate-900 to-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-900 shadow-sm'}`}>
+           {isProUser && (
                <div className="absolute top-0 right-0 p-4 opacity-10">
                    <Crown className="w-32 h-32" />
                </div>
@@ -204,18 +214,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ language, setLanguag
                    <div>
                       <h3 className="text-xs font-bold uppercase tracking-wider opacity-70 mb-1">{t.settings_current_plan}</h3>
                       <div className="flex items-center gap-2">
-                          <span className="text-2xl font-bold">{isPro ? t.settings_pro : t.settings_free}</span>
-                          {isPro && <Crown className="w-6 h-6 text-yellow-400 fill-current" />}
+                          <span className="text-2xl font-bold">{isProUser ? t.settings_pro : t.settings_free}</span>
+                          {isProUser && <Crown className="w-6 h-6 text-yellow-400 fill-current" />}
                       </div>
                    </div>
-                   {!isPro && (
+                   {!isProUser && (
                       <div className={`bg-${themeColor}-50 p-2 rounded-full`}>
                           <Crown className={`w-6 h-6 text-${themeColor}-600`} />
                       </div>
                    )}
                </div>
 
-               {!isPro ? (
+               {!isProUser ? (
                    <>
                       <p className="text-sm text-slate-500 mb-6 leading-relaxed">
                           {t.settings_pro_desc}

@@ -7,6 +7,7 @@ interface AuthResponse {
     id: number;
     email?: string;
     phone?: string;
+    isPro?: boolean;
   };
 }
 
@@ -14,8 +15,9 @@ interface UserInfo {
   id: number;
   email?: string;
   phone?: string;
-  createdAt: string;
-  lastLoginAt: string | null;
+  is_pro: boolean;
+  pro_expires_at?: string;
+  created_at: string;
 }
 
 // Token 存储
@@ -167,14 +169,17 @@ export const login = async (
   }
   
   const data = await response.json();
+  saveTokens(data.access_token, data.refresh_token);
+  
+  // 获取完整用户信息
+  const userInfo = await getCurrentUser();
   const result: AuthResponse = {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
-    user: type === 'email' 
+    user: userInfo || (type === 'email' 
       ? { id: 0, email: credential }
-      : { id: 0, phone: credential },
+      : { id: 0, phone: credential }),
   };
-  saveTokens(result.accessToken, result.refreshToken);
   saveUser(result.user);
   return result;
 };
@@ -228,4 +233,17 @@ export const getCurrentUser = async (): Promise<UserInfo | null> => {
   } catch (error) {
     return null;
   }
+};
+
+// 升级到专业版
+export const upgradeToPro = async (): Promise<UserInfo> => {
+  const response = await authFetch('/auth/upgrade', {
+    method: 'POST',
+  });
+  
+  if (!response.ok) {
+    throw new Error('升级失败');
+  }
+  
+  return response.json();
 };
