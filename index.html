@@ -65,6 +65,17 @@
         transition-property: background-color, border-color, color, fill, stroke, transform, box-shadow;
         transition-duration: 200ms;
       }
+
+      /* 安全区域 - 状态栏和底部导航栏 */
+      .pt-safe-top {
+        padding-top: env(safe-area-inset-top, 24px);
+      }
+      .pb-safe-bottom {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      .mt-safe-top {
+        margin-top: env(safe-area-inset-top, 24px);
+      }
     </style>
   <script type="importmap">
 {

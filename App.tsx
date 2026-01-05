@@ -10,10 +10,11 @@ import { SettingsView } from './components/SettingsView';
 import { Download, Loader2, Sparkles, Calendar } from './components/Icons';
 import { LiveVoiceMode } from './components/LiveVoiceMode';
 import { ClarificationModal } from './components/ClarificationModal';
+import { CalendarSyncModal } from './components/CalendarSyncModal';
 import { SplashScreen } from './components/SplashScreen';
 import { AuthView } from './components/AuthView';
 import { decomposeGoal, modifyPlan, checkGoalClarity } from './services/geminiService';
-import { syncToCalendar } from './services/calendarService';
+import { syncToCalendar, syncSingleTaskToCalendar } from './services/calendarService';
 import { fetchPlans, createPlan, deletePlan, updateTask as updateTaskApi, deleteTask as deleteTaskApi, addTaskToPlan } from './services/planService';
 import { LoadingState, Plan, Tab, TaskItem, ReminderSetting, ReminderStyle, Language } from './types';
 import { translations } from './utils/translations';
@@ -23,6 +24,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 function AppContent() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
+  const [showCalendarSync, setShowCalendarSync] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('create');
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
@@ -607,8 +609,28 @@ function AppContent() {
   };
 
   const handleDownload = () => {
-    if (currentPlan) {
-      downloadICSFile(currentPlan.tasks, currentPlan.startDate, `Plan_${currentPlan.goal.substring(0, 10)}.ics`);
+    if (history.length === 0) {
+      alert('没有可同步的计划');
+      return;
+    }
+    setShowCalendarSync(true);
+  };
+
+  const handleSyncPlan = async (plan: Plan) => {
+    try {
+      await syncToCalendar(plan.tasks, plan.startDate, plan.goal);
+    } catch (err) {
+      console.error('Calendar sync error:', err);
+      alert('同步失败: ' + (err as Error).message);
+    }
+  };
+
+  const handleSyncTask = async (task: TaskItem, plan: Plan) => {
+    try {
+      await syncSingleTaskToCalendar(task, plan.startDate, plan.goal);
+    } catch (err) {
+      console.error('Calendar sync error:', err);
+      alert('同步失败: ' + (err as Error).message);
     }
   };
   
@@ -738,6 +760,16 @@ function AppContent() {
             onSkip={handleClarificationSkip}
             isGenerating={loadingState === LoadingState.GENERATING}
             language={language}
+        />
+      )}
+
+      {/* Calendar Sync Modal */}
+      {showCalendarSync && (
+        <CalendarSyncModal
+          plans={history}
+          onClose={() => setShowCalendarSync(false)}
+          onSyncPlan={handleSyncPlan}
+          onSyncTask={handleSyncTask}
         />
       )}
 

@@ -1,44 +1,19 @@
 import { TaskItem } from '../types';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+// 定义自定义插件接口
+interface CalendarPluginInterface {
+  openICSFile(options: { content: string; fileName: string }): Promise<{ success: boolean }>;
+}
+
+// 注册自定义插件
+const CalendarPlugin = registerPlugin<CalendarPluginInterface>('CalendarPlugin');
 
 /**
  * 检查是否在原生平台上运行
  */
 export const isNativePlatform = (): boolean => {
   return Capacitor.isNativePlatform();
-};
-
-/**
- * 使用 Android Intent 打开日历添加事件界面
- * 这种方式不需要额外权限，兼容所有 Android 设备
- */
-export const addTaskToCalendarIntent = async (
-  task: TaskItem,
-  planStartDate: number,
-  goalName?: string
-): Promise<void> => {
-  const originDate = new Date(planStartDate);
-  const startDate = new Date(originDate);
-  startDate.setDate(originDate.getDate() + task.dayOffset);
-  
-  const [hours, minutes] = task.startTime.split(':').map(Number);
-  startDate.setHours(hours, minutes, 0, 0);
-
-  const endDate = new Date(startDate.getTime() + task.durationMinutes * 60000);
-
-  const title = goalName ? `[${goalName}] ${task.title}` : task.title;
-  
-  // 使用 Google Calendar Intent URL scheme
-  // 这在大多数 Android 设备上都能工作
-  const calendarUrl = new URL('https://www.google.com/calendar/render');
-  calendarUrl.searchParams.set('action', 'TEMPLATE');
-  calendarUrl.searchParams.set('text', title);
-  calendarUrl.searchParams.set('details', task.description);
-  calendarUrl.searchParams.set('dates', 
-    `${formatGoogleDate(startDate)}/${formatGoogleDate(endDate)}`
-  );
-  
-  window.open(calendarUrl.toString(), '_blank');
 };
 
 /**
@@ -130,28 +105,32 @@ export const downloadICSFile = (tasks: TaskItem[], planStartDate: number, fileNa
 };
 
 /**
- * 通过分享 ICS 文件同步到日历（Android 原生方式）
- * 用户可以选择任意日历应用打开
+ * 一键同步到日历 - 使用自定义 Android 插件直接打开日历应用
  */
-export const shareICSFile = async (
-  tasks: TaskItem[], 
-  planStartDate: number, 
-  fileName: string = 'my-plan.ics'
+export const syncToCalendar = async (
+  tasks: TaskItem[],
+  planStartDate: number,
+  goalName?: string
 ): Promise<void> => {
+  if (tasks.length === 0) {
+    alert('没有任务可以同步');
+    return;
+  }
+
   const content = generateICSFileContent(tasks, planStartDate);
-  
-  if (isNativePlatform() && navigator.share) {
+  // 文件名使用计划名
+  const fileName = `${goalName || 'plan'}.ics`;
+
+  if (isNativePlatform()) {
     try {
-      const file = new File([content], fileName, { type: 'text/calendar' });
-      await navigator.share({
-        files: [file],
-        title: 'PlanFlow 日程',
-        text: '导入到日历'
+      // 使用自定义插件直接打开日历应用
+      await CalendarPlugin.openICSFile({
+        content: content,
+        fileName: fileName
       });
-    } catch (err) {
-      // 如果分享失败，回退到下载
-      console.log('Share failed, falling back to download:', err);
-      downloadICSFile(tasks, planStartDate, fileName);
+    } catch (err: any) {
+      console.error('Calendar plugin failed:', err);
+      alert(`打开日历失败: ${err?.message || err}\n\n请确保手机上安装了日历应用`);
     }
   } else {
     // Web 环境直接下载
@@ -160,13 +139,27 @@ export const shareICSFile = async (
 };
 
 /**
- * 智能同步到日历 - 自动选择最佳方式
+ * 同步单个任务到日历
  */
-export const syncToCalendar = async (
-  tasks: TaskItem[],
+export const syncSingleTaskToCalendar = async (
+  task: TaskItem,
   planStartDate: number,
   goalName?: string
 ): Promise<void> => {
-  const fileName = `PlanFlow_${goalName?.substring(0, 10) || 'Plan'}.ics`;
-  await shareICSFile(tasks, planStartDate, fileName);
+  const content = generateICSFileContent([task], planStartDate);
+  const fileName = `${goalName || 'task'}.ics`;
+
+  if (isNativePlatform()) {
+    try {
+      await CalendarPlugin.openICSFile({
+        content: content,
+        fileName: fileName
+      });
+    } catch (err: any) {
+      console.error('Calendar plugin failed:', err);
+      alert(`打开日历失败: ${err?.message || err}\n\n请确保手机上安装了日历应用`);
+    }
+  } else {
+    downloadICSFile([task], planStartDate, fileName);
+  }
 };

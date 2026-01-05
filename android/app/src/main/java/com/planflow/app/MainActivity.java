@@ -7,6 +7,9 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // 注册自定义插件
+        registerPlugin(CalendarPlugin.class);
+        
         super.onCreate(savedInstanceState);
         
         // 允许 Mixed Content (HTTPS 页面请求 HTTP 资源)
