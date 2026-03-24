@@ -60,3 +60,9 @@ class Token(BaseModel):
 
 class TokenRefresh(BaseModel):
     refresh_token: str
+
+
+class EmailVerifyRequest(BaseModel):
+    """邮箱验证码验证请求"""
+    email: EmailStr
+    code: str

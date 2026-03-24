@@ -6,11 +6,12 @@
 // Windows: 打开 CMD，输入 ipconfig，找到 IPv4 地址
 // Mac/Linux: 打开终端，输入 ifconfig 或 ip addr
 
+// iOS 模拟器用 localhost 或 127.0.0.1
 // Android 模拟器用 10.0.2.2 访问主机
 // 真机调试改成你电脑的局域网 IP
 // 部署后改成服务器地址
 export const config = {
-  API_BASE_URL: 'http://192.168.1.113:8000',
+  API_BASE_URL: 'http://localhost:8000',
 };
 
 // 导出 API 基础地址

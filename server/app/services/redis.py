@@ -1,11 +1,11 @@
 import redis
 import hashlib
-from typing import Optional
+from typing import Optional, Tuple
+from datetime import datetime
 from app.config import get_settings
 
 settings = get_settings()
 
-# Redis 连接
 redis_client = redis.Redis(
     host=settings.redis_host,
     port=settings.redis_port,
@@ -14,13 +14,115 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Token 前缀
 REFRESH_TOKEN_PREFIX = "refresh_token:"
+EMAIL_RATE_PREFIX = "email_rate:"
+IP_RATE_PREFIX = "ip_rate:"
 
 
 def _hash_token(token: str) -> str:
-    """对 token 进行哈希，避免存储原始 token"""
     return hashlib.sha256(token.encode()).hexdigest()[:32]
+
+
+def check_email_rate_limit(email: str) -> Tuple[bool, int, str]:
+    """
+    检查邮箱发送频率限制
+    返回: (是否允许, 剩余秒数, 错误信息)
+    """
+    try:
+        now = datetime.now()
+        
+        minute_key = f"{EMAIL_RATE_PREFIX}{email}:minute"
+        hour_key = f"{EMAIL_RATE_PREFIX}{email}:hour"
+        day_key = f"{EMAIL_RATE_PREFIX}{email}:day"
+        
+        if redis_client.exists(minute_key):
+            ttl = redis_client.ttl(minute_key)
+            return False, ttl, f"请等待 {ttl} 秒后再试"
+        
+        hour_count = int(redis_client.get(hour_key) or 0)
+        if hour_count >= 5:
+            ttl = redis_client.ttl(hour_key)
+            return False, ttl, "发送次数过多，请 1 小时后再试"
+        
+        day_count = int(redis_client.get(day_key) or 0)
+        if day_count >= 10:
+            ttl = redis_client.ttl(day_key)
+            return False, ttl, "今日发送次数已达上限，请明天再试"
+        
+        return True, 0, ""
+    except Exception as e:
+        print(f"Redis rate limit check error: {e}")
+        return True, 0, ""
+
+
+def record_email_sent(email: str) -> None:
+    """记录邮箱发送"""
+    try:
+        minute_key = f"{EMAIL_RATE_PREFIX}{email}:minute"
+        hour_key = f"{EMAIL_RATE_PREFIX}{email}:hour"
+        day_key = f"{EMAIL_RATE_PREFIX}{email}:day"
+        
+        redis_client.setex(minute_key, 60, "1")
+        
+        hour_count = int(redis_client.get(hour_key) or 0)
+        if hour_count == 0:
+            redis_client.setex(hour_key, 3600, "1")
+        else:
+            redis_client.incr(hour_key)
+        
+        day_count = int(redis_client.get(day_key) or 0)
+        if day_count == 0:
+            redis_client.setex(day_key, 86400, "1")
+        else:
+            redis_client.incr(day_key)
+    except Exception as e:
+        print(f"Redis record email sent error: {e}")
+
+
+def check_ip_rate_limit(ip: str) -> Tuple[bool, int, str]:
+    """
+    检查 IP 发送频率限制
+    返回: (是否允许, 剩余秒数, 错误信息)
+    """
+    try:
+        hour_key = f"{IP_RATE_PREFIX}{ip}:hour"
+        day_key = f"{IP_RATE_PREFIX}{ip}:day"
+        
+        hour_count = int(redis_client.get(hour_key) or 0)
+        if hour_count >= 20:
+            ttl = redis_client.ttl(hour_key)
+            return False, ttl, "请求过于频繁，请稍后再试"
+        
+        day_count = int(redis_client.get(day_key) or 0)
+        if day_count >= 50:
+            ttl = redis_client.ttl(day_key)
+            return False, ttl, "今日请求次数已达上限"
+        
+        return True, 0, ""
+    except Exception as e:
+        print(f"Redis IP rate limit check error: {e}")
+        return True, 0, ""
+
+
+def record_ip_sent(ip: str) -> None:
+    """记录 IP 发送"""
+    try:
+        hour_key = f"{IP_RATE_PREFIX}{ip}:hour"
+        day_key = f"{IP_RATE_PREFIX}{ip}:day"
+        
+        hour_count = int(redis_client.get(hour_key) or 0)
+        if hour_count == 0:
+            redis_client.setex(hour_key, 3600, "1")
+        else:
+            redis_client.incr(hour_key)
+        
+        day_count = int(redis_client.get(day_key) or 0)
+        if day_count == 0:
+            redis_client.setex(day_key, 86400, "1")
+        else:
+            redis_client.incr(day_key)
+    except Exception as e:
+        print(f"Redis record IP sent error: {e}")
 
 
 def store_refresh_token(user_id: int, token: str, expire_days: int = 7) -> bool:

@@ -1,31 +1,45 @@
 import { TaskItem, ReminderStyle } from "../types";
 import { API_BASE_URL } from "./config";
-import { getAccessToken } from "./authService";
+import { getAccessToken, getRefreshToken, refreshAccessToken } from "./authService";
 
-const authHeaders = () => {
-  const token = getAccessToken();
-  console.log("=== AUTH HEADERS ===");
-  console.log("Token exists:", !!token);
-  console.log("Token preview:", token ? token.substring(0, 20) + "..." : "null");
-  return {
+const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const accessToken = getAccessToken();
+  
+  const headers: HeadersInit = {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
   };
+  
+  if (accessToken) {
+    (headers as Record<string, string>)["Authorization"] = `Bearer ${accessToken}`;
+  }
+  
+  let response = await fetch(url, { ...options, headers });
+  
+  // 如果 token 过期，尝试刷新
+  if (response.status === 401 && getRefreshToken()) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      (headers as Record<string, string>)["Authorization"] = `Bearer ${getAccessToken()}`;
+      response = await fetch(url, { ...options, headers });
+    }
+  }
+  
+  return response;
 };
 
 export const checkGoalClarity = async (
   goal: string
 ): Promise<{ isSufficient: boolean; clarifyingQuestion?: string }> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/ai/check-clarity`, {
+    const response = await authFetch(`${API_BASE_URL}/ai/check-clarity`, {
       method: "POST",
-      headers: authHeaders(),
       body: JSON.stringify({ goal }),
     });
 
     if (!response.ok) {
       console.error("Clarity check failed:", response.status);
-      return { isSufficient: true }; // 失败时默认继续
+      return { isSufficient: true };
     }
 
     const data = await response.json();
@@ -45,9 +59,8 @@ export const decomposeGoal = async (
   forceReminderStyle?: ReminderStyle,
   existingSchedule?: string
 ): Promise<TaskItem[]> => {
-  const response = await fetch(`${API_BASE_URL}/ai/decompose`, {
+  const response = await authFetch(`${API_BASE_URL}/ai/decompose`, {
     method: "POST",
-    headers: authHeaders(),
     body: JSON.stringify({
       goal,
       constraints,
@@ -92,9 +105,8 @@ export const modifyPlan = async (
     is_completed: t.isCompleted,
   }));
 
-  const response = await fetch(`${API_BASE_URL}/ai/modify`, {
+  const response = await authFetch(`${API_BASE_URL}/ai/modify`, {
     method: "POST",
-    headers: authHeaders(),
     body: JSON.stringify({
       current_tasks: tasksForBackend,
       instruction,

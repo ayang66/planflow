@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     gemini_api_key: str = ""
     deepseek_api_key: str = ""
+    aliyun_api_key: str = "sk-sp-bdc1a264ee4c46b3939ad71f49abde4b"
     
     # Redis 配置
     redis_host: str = "localhost"

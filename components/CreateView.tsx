@@ -44,10 +44,10 @@ export const CreateView: React.FC<CreateViewProps> = ({ onGenerate, onStartVoice
   };
 
   const suggestions = [
-    "Plan a 3-day trip to Tokyo",
-    "Prepare for a job interview in 1 week",
-    "Learn basic Python in a weekend",
-    "Organize a birthday party"
+    t.suggestion_1,
+    t.suggestion_2,
+    t.suggestion_3,
+    t.suggestion_4
   ];
 
   // Options

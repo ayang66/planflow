@@ -32,6 +32,11 @@ export const translations: Record<Language, Record<string, string>> = {
     create_label_reminder: "Default Reminder",
     create_suggestions: "Try asking",
 
+    suggestion_1: "Plan a 3-day trip to Tokyo",
+    suggestion_2: "Prepare for a job interview in 1 week",
+    suggestion_3: "Learn basic Python in a weekend",
+    suggestion_4: "Organize a birthday party",
+
     review_title: "Review Your Plan",
     review_subtitle: "Tap any text, time, or duration to edit. Use the magic wand for big changes.",
     review_btn_cancel: "Cancel",
@@ -181,6 +186,11 @@ export const translations: Record<Language, Record<string, string>> = {
     create_label_reminder: "默认提醒",
     create_suggestions: "试着问问",
 
+    suggestion_1: "计划一次东京三日游",
+    suggestion_2: "一周内准备面试",
+    suggestion_3: "周末学会Python基础",
+    suggestion_4: "组织一场生日派对",
+
     review_title: "审查你的计划",
     review_subtitle: "点击任何文本、时间或持续时间进行编辑。使用魔法棒进行大范围修改。",
     review_btn_cancel: "取消",
@@ -321,6 +331,11 @@ export const translations: Record<Language, Record<string, string>> = {
     create_label_reminder: "デフォルト通知",
     create_suggestions: "試してみる",
 
+    suggestion_1: "東京3日間旅行を計画",
+    suggestion_2: "1週間で面接準備",
+    suggestion_3: "週末でPython基礎を学ぶ",
+    suggestion_4: "誕生日パーティーを企画",
+
     review_title: "計画の確認",
     review_subtitle: "テキスト、時間、期間をタップして編集。魔法の杖で大きく変更。",
     review_btn_cancel: "キャンセル",
@@ -460,6 +475,11 @@ export const translations: Record<Language, Record<string, string>> = {
     create_label_time: "시간대",
     create_label_reminder: "기본 알림",
     create_suggestions: "제안 질문",
+
+    suggestion_1: "도쿄 3일 여행 계획",
+    suggestion_2: "1주일 안에 면접 준비",
+    suggestion_3: "주말에 파이썬 기초 배우기",
+    suggestion_4: "생일 파티 기획하기",
 
     review_title: "계획 검토",
     review_subtitle: "텍스트, 시간 또는 기간을 탭하여 편집하세요. 마술봉으로 크게 변경하세요.",

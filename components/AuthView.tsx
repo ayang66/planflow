@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { sendVerificationCode, verifyEmail } from '../services/authService';
 import { Sparkles, Loader2, Mail, Lock, Eye, EyeOff, UserPlus, LogIn, Phone } from './Icons';
 
 type LoginType = 'email' | 'phone';
@@ -14,9 +15,15 @@ export const AuthView: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [verifiedCode, setVerifiedCode] = useState(''); // 保存已验证的验证码
 
   const credential = loginType === 'email' ? email : phone;
 
@@ -26,6 +33,67 @@ export const AuthView: React.FC = () => {
 
   const validateEmail = (email: string): boolean => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  // 发送验证码
+  const handleSendCode = async () => {
+    if (!validateEmail(email)) {
+      setError('请输入有效的邮箱地址');
+      return;
+    }
+
+    setSendingCode(true);
+    setError('');
+
+    try {
+      const result = await sendVerificationCode(email);
+      setCodeSent(true);
+      
+      // 开发环境：显示验证码用于测试
+      if (result.expires_in) {
+        console.log('验证码已发送，有效期 10 分钟');
+        // 如果是开发环境且返回了验证码，可以显示在控制台
+      }
+      
+      // 开始倒计时
+      setCountdown(60);
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      console.error('Send code error:', err);
+      setError(err instanceof Error ? err.message : '发送失败，请重试');
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  // 验证邮箱
+  const handleVerifyEmail = async () => {
+    if (!verificationCode || verificationCode.length !== 6) {
+      setError('请输入 6 位验证码');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      await verifyEmail(email, verificationCode);
+      setEmailVerified(true);
+      setVerifiedCode(verificationCode); // 保存已验证的验证码
+    } catch (err) {
+      console.error('Verify email error:', err);
+      setError(err instanceof Error ? err.message : '验证码错误，请重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,7 +142,17 @@ export const AuthView: React.FC = () => {
       if (isLogin) {
         await authLogin(credential, password, loginType);
       } else {
-        await authRegister(credential, password, loginType);
+        // 邮箱注册需要验证
+        if (loginType === 'email' && !emailVerified) {
+          setError('请先验证邮箱');
+          setLoading(false);
+          return;
+        }
+        console.log('Registering with:', { credential, type: loginType, hasCode: !!verificationCode, code: verificationCode, emailVerified, verifiedCode });
+        // 使用已验证的验证码（防止用户清空输入框）
+        const codeToUse = emailVerified ? verifiedCode : verificationCode;
+        console.log('[DEBUG] codeToUse:', codeToUse, 'emailVerified:', emailVerified, 'verifiedCode:', verifiedCode);
+        await authRegister(credential, password, loginType, loginType === 'email' ? codeToUse : undefined);
       }
     } catch (err) {
       console.error('Auth error:', err);
@@ -82,6 +160,9 @@ export const AuthView: React.FC = () => {
 
       if (err instanceof Error) {
         errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as Record<string, unknown>;
+        errorMessage = (errorObj.detail || errorObj.message || JSON.stringify(err)) as string;
       }
 
       setError(errorMessage);
@@ -120,8 +201,8 @@ export const AuthView: React.FC = () => {
             </p>
           </div>
 
-          {/* 登录方式切换 */}
-          <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
+          {/* 登录方式切换 - 手机号登录暂时禁用 */}
+          {/* <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
             <button
               type="button"
               onClick={() => { setLoginType('email'); setError(''); }}
@@ -144,7 +225,7 @@ export const AuthView: React.FC = () => {
             >
               手机登录
             </button>
-          </div>
+          </div> */}
 
           {/* 错误提示 */}
           {error && (
@@ -156,8 +237,8 @@ export const AuthView: React.FC = () => {
 
           {/* 表单 */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* 邮箱/手机号 */}
-            {loginType === 'email' ? (
+            {/* 邮箱输入 */}
+            <>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 ml-1">邮箱</label>
                 <div className="relative">
@@ -168,11 +249,74 @@ export const AuthView: React.FC = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     className={`w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-${themeColor}-500 focus:border-transparent outline-none transition-all text-slate-900 placeholder:text-slate-400`}
                     placeholder="your@email.com"
-                    disabled={loading}
+                    disabled={loading || codeSent}
                   />
                 </div>
               </div>
-            ) : (
+
+              {/* 验证码（仅注册时显示） */}
+              {!isLogin && (
+                <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                  <label className="text-sm font-medium text-slate-700 ml-1">验证码</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className={`w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-${themeColor}-500 focus:border-transparent outline-none transition-all text-slate-900 placeholder:text-slate-400 text-center tracking-widest`}
+                        placeholder="输入6位验证码"
+                        maxLength={6}
+                        disabled={loading}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSendCode}
+                      disabled={sendingCode || countdown > 0}
+                      className={`px-4 py-2 text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
+                        countdown > 0
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : sendingCode
+                          ? `bg-${themeColor}-100 text-${themeColor}-600`
+                          : `bg-${themeColor}-600 text-white hover:bg-${themeColor}-700`
+                      }`}
+                    >
+                      {sendingCode ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : countdown > 0 ? (
+                        `${countdown}s`
+                      ) : (
+                        '获取验证码'
+                      )}
+                    </button>
+                  </div>
+                  {codeSent && !emailVerified && (
+                    <button
+                      type="button"
+                      onClick={handleVerifyEmail}
+                      disabled={!verificationCode || verificationCode.length !== 6}
+                      className={`w-full py-2 text-sm font-medium rounded-xl transition-all ${
+                        verificationCode && verificationCode.length === 6
+                          ? `bg-${themeColor}-100 text-${themeColor}-600 hover:bg-${themeColor}-200`
+                          : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      验证邮箱
+                    </button>
+                  )}
+                  {emailVerified && (
+                    <div className="text-green-600 text-sm font-medium flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-600 rounded-full" />
+                      邮箱已验证
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+
+            {/* 手机号登录 - 暂时禁用
+            {loginType === 'phone' && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 ml-1">手机号</label>
                 <div className="relative">
@@ -188,6 +332,7 @@ export const AuthView: React.FC = () => {
                 </div>
               </div>
             )}
+            */}
 
             {/* 密码 */}
             <div className="space-y-2">

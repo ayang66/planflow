@@ -18,7 +18,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isPro: boolean;
   login: (credential: string, password: string, type?: LoginType) => Promise<void>;
-  register: (credential: string, password: string, type?: LoginType) => Promise<void>;
+  register: (credential: string, password: string, type?: LoginType, verificationCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   upgrade: () => Promise<void>;
@@ -58,9 +58,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const handleRegister = async (credential: string, password: string, type: LoginType = 'email') => {
+  const handleRegister = async (credential: string, password: string, type: LoginType = 'email', verificationCode?: string) => {
     try {
-      const authResponse = await register(credential, password, type);
+      const authResponse = await register(credential, password, type, verificationCode);
       setUser(authResponse.user);
     } catch (error) {
       throw error;

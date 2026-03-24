@@ -6,39 +6,71 @@ from app.schemas.plan import TaskCreate
 
 settings = get_settings()
 
-DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+ALIYUN_API_URL = "https://coding.dashscope.aliyuncs.com/v1/chat/completions"
+ALIYUN_MODEL = "qwen3.5-plus"
 
 
 async def call_deepseek(system_prompt: str, user_prompt: str) -> Tuple[str, dict]:
-    """调用 DeepSeek API，返回 (内容, token使用信息)"""
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            DEEPSEEK_API_URL,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {settings.deepseek_api_key}",
-            },
-            json={
-                "model": "deepseek-chat",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.7,
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-        
-        # 提取 token 使用信息
-        usage = data.get("usage", {})
-        token_info = {
-            "model": "deepseek-chat",
-            "prompt_tokens": usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-        }
-        
-        return data["choices"][0]["message"]["content"], token_info
+    """调用阿里云 codingplan API，返回 (内容, token使用信息)"""
+    import traceback
+    try:
+        # 增加超时时间到 120 秒
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            print(f"[DEBUG] Calling API: {ALIYUN_API_URL}")
+            print(f"[DEBUG] Model: {ALIYUN_MODEL}")
+            print(f"[DEBUG] API Key: {settings.aliyun_api_key[:20]}...")
+            print(f"[DEBUG] System prompt: {system_prompt[:100]}...")
+            print(f"[DEBUG] User prompt: {user_prompt[:100]}...")
+            
+            try:
+                response = await client.post(
+                    ALIYUN_API_URL,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {settings.aliyun_api_key}",
+                    },
+                    json={
+                        "model": ALIYUN_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": 0.7,
+                    },
+                )
+            except httpx.ReadTimeout:
+                print(f"[DEBUG] Request timeout after 120s")
+                raise Exception("API 请求超时，请稍后重试")
+            except Exception as req_err:
+                print(f"[DEBUG] Request failed: {type(req_err).__name__}: {req_err}")
+                print(f"[DEBUG] Traceback: {traceback.format_exc()}")
+                raise
+            
+            print(f"[DEBUG] Response status: {response.status_code}")
+            
+            if response.status_code != 200:
+                error_text = response.text
+                print(f"[DEBUG] Error response: {error_text}")
+                raise Exception(f"API error {response.status_code}: {error_text}")
+            
+            data = response.json()
+            print(f"[DEBUG] Response data keys: {list(data.keys())}")
+            
+            # 提取 token 使用信息
+            usage = data.get("usage", {})
+            token_info = {
+                "model": ALIYUN_MODEL,
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+            }
+            
+            content = data["choices"][0]["message"]["content"]
+            print(f"[DEBUG] Response content length: {len(content)}")
+            return content, token_info
+    except Exception as e:
+        print(f"[DEBUG] API call error: {type(e).__name__}: {e}")
+        print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+        raise
 
 
 def parse_json_response(text: str) -> any:
@@ -74,7 +106,7 @@ async def check_goal_clarity(goal: str) -> Tuple[dict, dict]:
         return parse_json_response(response), token_info
     except Exception as e:
         print(f"Clarity check error: {e}")
-        return {"is_sufficient": True}, {"model": "deepseek-chat", "prompt_tokens": 0, "completion_tokens": 0}
+        return {"is_sufficient": True}, {"model": ALIYUN_MODEL, "prompt_tokens": 0, "completion_tokens": 0}
 
 
 async def decompose_goal(

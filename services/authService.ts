@@ -57,6 +57,47 @@ export const isAuthenticated = (): boolean => {
   return !!getAccessToken();
 };
 
+// 发送验证码
+export const sendVerificationCode = async (email: string): Promise<{ message: string; expires_in: number }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/send-verification-code?email=${encodeURIComponent(email)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || '发送失败');
+    }
+    
+    return response.json();
+  } catch (networkError) {
+    console.error('Network error during sending verification code:', networkError);
+    throw new Error('网络连接失败，请检查网络后重试');
+  }
+};
+
+// 验证邮箱
+export const verifyEmail = async (email: string, code: string): Promise<{ message: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || '验证失败');
+    }
+    
+    return response.json();
+  } catch (networkError) {
+    console.error('Network error during email verification:', networkError);
+    throw new Error('网络连接失败，请检查网络后重试');
+  }
+};
+
 
 // API 请求封装
 const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
@@ -91,16 +132,26 @@ type LoginType = 'email' | 'phone';
 export const register = async (
   credential: string, 
   password: string, 
-  type: LoginType = 'email'
+  type: LoginType = 'email',
+  verificationCode?: string
 ): Promise<AuthResponse> => {
+  console.log('[DEBUG] register called with:', { credential, type, verificationCode });
   let response: Response;
   
-  const body = type === 'email' 
+  const body: any = type === 'email' 
     ? { email: credential, password }
     : { phone: credential, password };
   
+  // 验证码作为查询参数传递（邮箱注册时需要）
+  const url = type === 'email' && verificationCode 
+    ? `${API_BASE_URL}/auth/register?verification_code=${encodeURIComponent(verificationCode)}`
+    : `${API_BASE_URL}/auth/register`;
+  
+  console.log('[DEBUG] Request URL:', url);
+  console.log('[DEBUG] Request body:', body);
+  
   try {
-    response = await fetch(`${API_BASE_URL}/auth/register`, {
+    response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -113,9 +164,11 @@ export const register = async (
   if (!response.ok) {
     let errorMessage = '注册失败';
     try {
-      const error = await response.json();
-      errorMessage = error.detail || error.error || error.message || errorMessage;
-    } catch {
+      const errorData = await response.json();
+      console.error('Register error response:', errorData);
+      errorMessage = errorData.detail || errorData.error || errorData.message || errorMessage;
+    } catch (parseError) {
+      console.error('Failed to parse error response:', parseError);
       if (response.status === 400) {
         errorMessage = type === 'email' ? '该邮箱已被注册' : '该手机号已被注册';
       } else if (response.status >= 500) {
@@ -124,6 +177,10 @@ export const register = async (
     }
     throw new Error(errorMessage);
   }
+  
+  // 注册成功，解析响应
+  const userData = await response.json();
+  console.log('Register success, user data:', userData);
   
   // 注册成功后自动登录获取 token
   return login(credential, password, type);

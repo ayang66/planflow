@@ -22,6 +22,7 @@ async def init_db():
     from app.models.user import User
     from app.models.plan import Plan, Task
     from app.models.token_usage import TokenUsage
+    from app.models.email_verification import EmailVerification
     
     # 创建所有表
     async with engine.begin() as conn:
