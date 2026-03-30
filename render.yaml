@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: planflow-api
+    env: python
+    region: singapore
+    buildCommand: cd server && pip install -r requirements.txt
+    startCommand: cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql+asyncpg://postgres.uohcwutaxzxthkokqsbt:%23Lhy020312lhy@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GEMINI_API_KEY
+        value: your-gemini-api-key-here
+      - key: DEEPSEEK_API_KEY
+        value: sk-480997ccc5644e0186040f93970e9117
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: planflow-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: planflow-redis
+          property: port
+
+  - type: redis
+    name: planflow-redis
+    maxmemoryPolicy: noeviction
