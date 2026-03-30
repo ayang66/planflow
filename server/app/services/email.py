@@ -1,6 +1,7 @@
 import smtplib
 import random
 import string
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
@@ -12,6 +13,9 @@ SMTP_PORT = 465  # SSL 端口
 SMTP_USER = "3274647417@qq.com"
 SMTP_PASSWORD = "yrurlaojmnobdbaj"  # QQ 邮箱授权码
 FROM_EMAIL = "3274647417@qq.com"
+
+# 创建 SSL context
+SSL_CONTEXT = ssl.create_default_context()
 
 
 def generate_verification_code(length: int = 6) -> str:
@@ -43,7 +47,7 @@ def send_email(to_email: str, subject: str, content: str) -> bool:
         msg.attach(html_part)
         
         # 连接 SMTP 服务器并发送
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10) as server:
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=SSL_CONTEXT, timeout=10) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(FROM_EMAIL, to_email, msg.as_string())
         
