@@ -11,7 +11,7 @@
 // 真机调试改成你电脑的局域网 IP
 // 部署后改成服务器地址
 export const config = {
-  API_BASE_URL: 'http://localhost:8000',
+  API_BASE_URL: 'https://planflow-xjjc.onrender.com',
 };
 
 // 导出 API 基础地址

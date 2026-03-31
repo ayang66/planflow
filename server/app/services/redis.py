@@ -2,17 +2,28 @@ import redis
 import hashlib
 from typing import Optional, Tuple
 from datetime import datetime
+from urllib.parse import urlparse
 from app.config import get_settings
 
 settings = get_settings()
 
-redis_client = redis.Redis(
-    host=settings.redis_host,
-    port=settings.redis_port,
-    db=settings.redis_db,
-    password=settings.redis_password or None,
-    decode_responses=True
-)
+if settings.redis_url:
+    parsed = urlparse(settings.redis_url)
+    redis_client = redis.Redis(
+        host=parsed.hostname or "localhost",
+        port=parsed.port or 6379,
+        password=parsed.password or None,
+        db=int(parsed.path.lstrip("/")) if parsed.path and parsed.path != "/" else 0,
+        decode_responses=True
+    )
+else:
+    redis_client = redis.Redis(
+        host=settings.redis_host,
+        port=settings.redis_port,
+        db=settings.redis_db,
+        password=settings.redis_password or None,
+        decode_responses=True
+    )
 
 REFRESH_TOKEN_PREFIX = "refresh_token:"
 EMAIL_RATE_PREFIX = "email_rate:"
