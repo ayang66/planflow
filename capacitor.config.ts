@@ -9,8 +9,12 @@ const config: CapacitorConfig = {
   },
   server: {
     cleartext: true,
-    androidScheme: 'http',  // 使用 HTTP 而不是 HTTPS
-  }
+    androidScheme: 'http',
+  },
+  ios: {
+    allowsLinkPreview: false,
+    scrollEnabled: true,
+  },
 };
 
 export default config;
